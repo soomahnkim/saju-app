@@ -237,3 +237,11 @@ if r:
         st.success("저장했습니다")
     st.caption("※ 절기는 태양 황경 계산으로 구했으며 수 분 내외의 오차가 있을 수 있습니다. "
                "풀이는 일반적인 해설로, 재미와 참고용으로 봐주세요.")
+
+# 화면 오른쪽 하단 제작자 표기
+st.markdown(
+    "<div style='text-align:right; font-size:12px; color:#7a6a4f;'>"
+    "Made by 김수만. 2026.11.20</div>",
+    unsafe_allow_html=True,
+)
+
