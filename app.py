@@ -2,6 +2,7 @@ import calendar, json, math, os
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 import streamlit as st
+from korean_lunar_calendar import KoreanLunarCalendar
 
 # ───────── 기본 데이터 ─────────
 STEM_K, STEM_H = list("갑을병정무기경신임계"), list("甲乙丙丁戊己庚辛壬癸")
@@ -127,11 +128,19 @@ SAVE = os.environ.get("SAJU_SAVE") == "1"  # 내 컴퓨터에서만 저장 기�
 FILE = "records.json"
 load_recs = lambda: json.load(open(FILE, encoding="utf-8")) if os.path.exists(FILE) else []
 
+def run(d, t, g, adj, label):
+    """계산 + 화면에 보여줄 입력 정보(label, 양력 날짜 등)를 결과에 함께 저장"""
+    r = calc(d, t, g == "남", adj)
+    r.update(solar=d, h=t.hour, mi=t.minute, g=g, adj=adj,
+             when=f"{label} {t.hour}시 {t.minute:02d}분 ({g})")
+    return r
+
 def load(rec):
-    bd = date.fromisoformat(rec["d"])
-    st.session_state.update(name=rec["n"], y=bd.year, mo=bd.month, dd=bd.day,
+    bd = date.fromisoformat(rec["d"])  # 저장된 날짜는 양력 기준
+    st.session_state.update(name=rec["n"], cal="양력", y=bd.year, mo=bd.month, dd=bd.day,
                             t=time(rec["h"], rec["m"]), g=rec["g"], adj=rec["a"])
-    st.session_state.r = calc(bd, st.session_state.t, rec["g"] == "남", rec["a"])
+    st.session_state.r = run(bd, st.session_state.t, rec["g"], rec["a"],
+                             f"{bd.year}년 {bd.month}월 {bd.day}일(양력)")
 
 st.set_page_config(page_title="사주팔자", page_icon="命")
 st.title("命 사주팔자")
@@ -155,23 +164,43 @@ st.session_state.setdefault("y", 1990)
 st.session_state.setdefault("mo", 1)
 st.session_state.setdefault("dd", 1)
 st.write("**생년월일**")
+cal_type = st.radio("달력 구분", ["양력", "음력"], horizontal=True, key="cal")
 c1, c2, c3 = st.columns([1.3, 1, 1])
 y = c1.selectbox("년", years, key="y", format_func=lambda v: f"{v}년")
 mo = c2.selectbox("월", list(range(1, 13)), key="mo", format_func=lambda v: f"{v}월")
-nd = calendar.monthrange(y, mo)[1]  # 해당 월의 마지막 날 (윤년 포함)
+leap = False
+if cal_type == "음력":
+    nd = 30  # 음력은 29일 또는 30일 (존재 여부는 아래에서 검증)
+    leap = st.checkbox("윤달 (해당 월이 윤달이면 체크)", key="leap")
+else:
+    nd = calendar.monthrange(y, mo)[1]  # 해당 월의 마지막 날 (윤년 포함)
 if st.session_state.dd > nd:
     st.session_state.dd = nd
 dd = c3.selectbox("일", list(range(1, nd + 1)), key="dd", format_func=lambda v: f"{v}일")
-d = date(y, mo, dd)
+
+d, label = None, ""  # d = 계산에 쓰는 양력 날짜
+if cal_type == "음력":
+    kc = KoreanLunarCalendar()
+    if y <= 2050 and kc.setLunarDate(y, mo, dd, leap):
+        d = date.fromisoformat(kc.SolarIsoFormat()[:10])
+        label = f"음력 {y}년 {'윤' if leap else ''}{mo}월 {dd}일 (양력 {d.year}.{d.month}.{d.day})"
+        st.caption(f"양력으로 변환: {d.year}년 {d.month}월 {d.day}일")
+    else:
+        st.error("존재하지 않는 음력 날짜입니다. 윤달 체크와 일(29일/30일)을 확인해 주세요.")
+else:
+    d = date(y, mo, dd)
+    label = f"{y}년 {mo}월 {dd}일(양력)"
 t = st.time_input("태어난 시간", value=time(12, 0), step=60, key="t")
 g = st.radio("성별", ["남", "여"], horizontal=True, key="g")
 adj = st.toggle("진태양시 보정 (서울 127°E 기준)", value=True, key="adj",
                 help="켜면 서울의 지방 태양시(UTC+8:28)로 일주·시주를 계산합니다. 연도별 표준시 변경과 서머타임은 자동 반영됩니다.")
 if st.button("사주 보기", type="primary"):
-    if d > date.today():
+    if d is None:
+        st.error("생년월일을 확인해 주세요.")
+    elif d > date.today():
         st.error("오늘 이후의 날짜는 계산할 수 없습니다.")
     else:
-        st.session_state.r = calc(d, t, g == "남", adj)
+        st.session_state.r = run(d, t, g, adj, label)
 
 r = st.session_state.get("r")
 if r:
@@ -225,14 +254,14 @@ if r:
         s, b = r["dae"][cur]
         st.write(f"**현재 대운: {STEM_K[s]}{BR_K[b]} ({ten(dm, s)} 운)**")
 
-    when = f"{d.year}년 {d.month}월 {d.day}일 {t.hour}시 {t.minute:02d}분 ({g})"
+    when = r["when"]
     txt = share_text(r, name, when)
     st.subheader("공유")
     st.code(txt, language=None)  # 오른쪽 위 복사 버튼 → 카톡 등에 붙여넣기
     st.download_button("텍스트 파일로 저장", txt, file_name="saju.txt")
     if SAVE and st.button("이 사주 저장"):
         recs = load_recs()
-        recs.append(dict(n=name or "이름없음", d=d.isoformat(), h=t.hour, m=t.minute, g=g, a=adj))
+        recs.append(dict(n=name or "이름없음", d=r["solar"].isoformat(), h=r["h"], m=r["mi"], g=r["g"], a=r["adj"]))
         json.dump(recs, open(FILE, "w", encoding="utf-8"), ensure_ascii=False)
         st.success("저장했습니다")
     st.caption("※ 절기는 태양 황경 계산으로 구했으며 수 분 내외의 오차가 있을 수 있습니다. "
@@ -244,4 +273,3 @@ st.markdown(
     "Made by 김수만. 2026.11.20</div>",
     unsafe_allow_html=True,
 )
-
