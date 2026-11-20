@@ -1,4 +1,4 @@
-import calendar, json, math, os
+import calendar, json, math, os, urllib.parse
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 import streamlit as st
@@ -32,6 +32,50 @@ GROUP_TEXT = [
     "관성(편관·정관): 직업, 책임, 명예. 많으면 책임감과 압박, 적으면 자유로우나 조직 적응에 노력.",
     "인성(편인·정인): 학문, 보호, 자격. 많으면 사려 깊고 의존적, 적으면 독립적이나 후원 부족.",
 ]
+
+DM_DETAIL = [
+    "곧게 뻗는 큰 나무처럼 자존심이 강하고 정직하며, 새로운 일을 시작하고 이끄는 힘이 있습니다. 굽히기 싫어하는 고집이 약점이라 유연함을 더하면 좋습니다. 교육, 기획, 경영, 개척형 분야에 어울립니다.",
+    "풀과 덩굴처럼 환경에 잘 적응하고 사람을 부드럽게 끄는 힘이 있습니다. 겉은 순해도 속은 끈질깁니다. 눈치를 너무 보다 결정을 미루는 점을 조심하세요. 상담, 디자인, 서비스, 예술 분야에 어울립니다.",
+    "태양처럼 밝고 공명정대하며 사람을 모으는 매력이 있습니다. 시작은 화끈하지만 급한 면이 있어 마무리를 챙기는 것이 중요합니다. 방송, 영업, 교육, 대외 활동 분야에 어울립니다.",
+    "촛불처럼 따뜻하고 섬세하며 한 가지에 깊이 몰입합니다. 예의 바르고 배려심이 있으나 마음의 상처를 오래 담아 두기 쉽습니다. 연구, 교육, 문화예술, 의료·상담 분야에 어울립니다.",
+    "큰 산처럼 묵직하고 신뢰감이 있으며 중심을 잡아 주는 사람입니다. 변화에 느리고 고집스러워 보일 수 있습니다. 조직 운영, 부동산, 금융, 관리직 분야에 어울립니다.",
+    "논밭의 흙처럼 포용력이 있고 실속 있게 사람과 일을 키웁니다. 겉으로 드러내지 않고 속으로 걱정을 많이 하는 편입니다. 교육, 농·식품, 서비스, 상담·행정 분야에 어울립니다.",
+    "바위와 쇠처럼 결단력과 추진력이 강하고 의리를 중시합니다. 직설적이어서 차갑게 보일 수 있으니 말의 온도를 살피면 좋습니다. 군·경, 법률, 기계·기술, 운동 분야에 어울립니다.",
+    "보석처럼 섬세하고 깔끔하며 미적 감각과 완벽주의 성향이 있습니다. 예민하고 자존심이 강해 상처를 잘 받을 수 있습니다. 전문직, 금융, 패션·디자인, 정밀 기술 분야에 어울립니다.",
+    "큰 강과 바다처럼 포용력이 크고 생각의 스케일이 넓으며 자유를 사랑합니다. 계획 없이 흘러가거나 한 곳에 머물기 어려운 면이 있습니다. 무역, 유통, 학문, 연구, 기획 분야에 어울립니다.",
+    "이슬과 빗물처럼 영리하고 감수성이 풍부하며 직관과 눈치가 빠릅니다. 생각이 많고 걱정을 쌓아 두기 쉬워 마음을 쉬게 하는 시간이 필요합니다. 연구, 기획, 글쓰기, 상담·의료 분야에 어울립니다.",
+]
+TEN_DAE = {
+    "비견": "나와 비슷한 사람(동료·형제·친구)과 어울리고 독립심과 자존심이 커지는 시기입니다. 협력도 늘지만 경쟁과 재물 분산에 주의하세요.",
+    "겁재": "경쟁과 승부욕이 강해지고 사람 관계로 얻고 잃는 일이 생기는 시기입니다. 동업·보증·투자는 신중하게 하세요.",
+    "식신": "먹고 즐기고 만들어 내는 여유의 시기입니다. 재능과 취미가 꽃피고 몸과 마음이 편해지기 쉽습니다. 안주하지 않는 것이 포인트입니다.",
+    "상관": "표현력과 창의성이 커지고 기존 틀을 깨고 싶어지는 시기입니다. 말실수와 윗사람과의 마찰에 주의하세요.",
+    "편재": "활동 범위가 넓어지고 큰 돈과 사업 기회를 만나기 쉬운 시기입니다. 들어오는 만큼 나가기 쉬우니 관리가 중요합니다.",
+    "정재": "꾸준한 수입과 안정, 성실한 재물 관리의 시기입니다. 가정과 현실 기반을 다지기 좋습니다.",
+    "편관": "책임과 압박이 커지고 도전과 시험이 따르는 시기입니다. 버티며 실력을 쌓으면 큰 성장이 됩니다. 건강 관리에 신경 쓰세요.",
+    "정관": "직장·명예·질서가 따르는 시기로 승진이나 자격, 사회적 인정을 얻기 좋습니다. 규칙을 지키는 자세가 도움이 됩니다.",
+    "편인": "특이한 공부, 기술, 종교·철학 등 남다른 분야에 관심이 생기는 시기입니다. 생각이 많아져 변덕이 생기지 않게 주의하세요.",
+    "정인": "학업, 자격, 문서, 윗사람의 도움이 따르는 안정의 시기입니다. 배우고 준비하기 좋으나 의존적이 되지 않도록 하세요.",
+}
+EL_LACK = [
+    "목이 부족: 추진력과 성장 에너지, 계획성이 약해질 수 있습니다. 간·눈·근육 건강을 챙기고 새로운 시작을 의식적으로 해 보세요.",
+    "화가 부족: 열정과 표현이 소극적일 수 있습니다. 밝은 활동과 사람과의 교류를 늘려 보세요.",
+    "토가 부족: 안정감과 중심, 신뢰를 쌓는 힘이 약할 수 있습니다. 규칙적인 생활과 소화기 건강에 신경 쓰세요.",
+    "금이 부족: 결단력과 마무리가 약할 수 있습니다. 원칙과 기준을 정해 두면 좋습니다.",
+    "수가 부족: 유연함과 지혜, 휴식이 부족할 수 있습니다. 충분한 수면과 배우는 습관이 도움이 됩니다.",
+]
+EL_EXCESS = [
+    "목이 과다: 생각과 계획이 많고 고집이 세질 수 있습니다. 하나에 집중하고 유연함을 기르세요.",
+    "화가 과다: 급하고 감정 기복이 클 수 있습니다. 쉬어 가는 시간과 호흡 조절이 필요합니다.",
+    "토가 과다: 고집과 걱정이 많고 변화에 둔할 수 있습니다. 새로운 시도를 조금씩 해 보세요.",
+    "금이 과다: 냉정하고 비판적으로 보일 수 있습니다. 말의 온도와 여유를 챙기세요.",
+    "수가 과다: 생각이 많고 불안·우유부단해지기 쉽습니다. 계획을 정해 행동으로 옮기세요.",
+]
+STRENGTH_TEXT = {
+    "신강": "일간의 힘이 강한 편입니다. 주관과 추진력이 크고 스스로 일어서는 힘이 좋습니다. 에너지를 밖으로 쓰는 식상·재성·관성의 흐름(표현, 재물, 직업 활동)이 잘 맞고, 고집과 독선을 경계하세요.",
+    "신약": "일간의 힘이 상대적으로 약한 편입니다. 주변 환경과 사람의 영향을 많이 받아 도움과 협력이 중요합니다. 나를 돕는 비겁·인성(동료, 공부, 휴식, 윗사람의 도움)이 들어오는 시기에 힘이 나며, 무리한 확장은 조심하세요.",
+    "균형": "일간의 힘이 크게 치우치지 않은 균형형입니다. 상황에 따라 유연하게 대응할 수 있고, 운의 흐름에 따라 강점이 달라집니다.",
+}
 
 SEOUL = ZoneInfo("Asia/Seoul")      # 연도별 표준시 변경·서머타임 규칙 내장
 SOLAR = timedelta(hours=8, minutes=28)  # 서울(127°E) 진태양시 = UTC+8:28
@@ -76,6 +120,19 @@ def ten(ds, os_):
 def group_of(ds, os_):
     return (STEM_EL[os_] - STEM_EL[ds]) % 5
 
+def strength(r):
+    """일간을 돕는 힘(비겁·인성) 비율로 신강/신약 간이 판정. 월지 가중치 3."""
+    dm = r["p"][2][0]
+    w = {(0, "s"): 1, (0, "b"): 1, (1, "s"): 1, (1, "b"): 3, (2, "b"): 1.5, (3, "s"): 1, (3, "b"): 1}
+    sup = tot = 0
+    for (i, kind), wt in w.items():
+        s_, b_ = r["p"][i]
+        tot += wt
+        if group_of(dm, s_ if kind == "s" else BR_MAIN[b_]) in (0, 4):
+            sup += wt
+    ratio = sup / tot
+    return ("신강" if ratio >= 0.6 else "신약" if ratio <= 0.4 else "균형"), ratio
+
 def calc(d, t, male, adj):
     # 입력 시각 = 그 당시 한국의 시계 시각 → 연도별 규칙으로 UTC 변환 (서머타임 자동 반영)
     wall = datetime(d.year, d.month, d.day, t.hour, t.minute, tzinfo=SEOUL)
@@ -116,13 +173,29 @@ def glyph(ch, e):
             f"text-align:center;font-size:32px;font-weight:bold;color:{c};"
             f"background:{c}1f;border:1px solid {c};border-radius:4px'>{ch}</div>")
 
-def share_text(r, name, when):
+def ai_prompt(r):
+    """사주 계산 결과만으로 AI에게 보낼 질문 문장 생성 (생년월일·이름 등 개인정보 미포함)"""
     p = lambda x: STEM_K[x[0]] + BR_K[x[1]]
-    n = f"{name}님의 " if name else ""
-    return (f"{n}사주팔자\n{when}\n\n년주 {p(r['p'][0])} / 월주 {p(r['p'][1])} / "
-            f"일주 {p(r['p'][2])} / 시주 {p(r['p'][3])}\n{DM_TEXT[r['p'][2][0]]}\n\n"
+    return ("아래 사주팔자는 이미 계산된 것이니 다시 계산하지 말고 풀이만 해 주세요. "
+            "성격, 직업·재물, 연애·결혼, 건강, 대운별 흐름을 항목별로 쉽고 상세하게 설명해 주세요.\n\n"
+            f"년주 {p(r['p'][0])} / 월주 {p(r['p'][1])} / 일주 {p(r['p'][2])} / 시주 {p(r['p'][3])}\n"
             f"대운({'순행' if r['fwd'] else '역행'}, {r['age']}세 시작): "
             + " ".join(p(x) for x in r["dae"]))
+
+def share_text(r, name, when):
+    p = lambda x: STEM_K[x[0]] + BR_K[x[1]]
+    dm = r["p"][2][0]
+    n = f"{name}님의 " if name else ""
+    lab, ratio = strength(r)
+    lines = [f"{n}사주팔자", when, "",
+             f"년주 {p(r['p'][0])} / 월주 {p(r['p'][1])} / 일주 {p(r['p'][2])} / 시주 {p(r['p'][3])}",
+             DM_TEXT[dm], DM_DETAIL[dm], "",
+             f"[일간 강약] {lab} - {STRENGTH_TEXT[lab]}", "",
+             f"[대운] {'순행' if r['fwd'] else '역행'}, {r['age']}세 시작"]
+    for k, x in enumerate(r["dae"]):
+        a0 = r["age"] + 10 * k
+        lines.append(f"· {a0}~{a0 + 9}세 {p(x)}({ten(dm, x[0])}운): {TEN_DAE[ten(dm, x[0])]}")
+    return "\n".join(lines)
 
 SAVE = os.environ.get("SAJU_SAVE") == "1"  # 내 컴퓨터에서만 저장 기능 사용
 FILE = "records.json"
@@ -228,12 +301,23 @@ if r:
         gr[group_of(dm, BR_MAIN[b])] += 1
     st.subheader("오행 분포")
     st.write("  ".join(f"**{EL[i]} {el[i]}**" for i in range(5)))
+    for i in range(5):
+        if el[i] == 0:
+            st.write("▪ " + EL_LACK[i])
+        elif el[i] >= 4:
+            st.write("▪ " + EL_EXCESS[i])
     st.subheader("나의 일간")
     st.write(DM_TEXT[dm])
+    st.write(DM_DETAIL[dm])
     st.subheader("십성 풀이")
     st.write("  ".join(f"**{GROUP[i]} {gr[i]}**" for i in range(5)))
     st.write("가장 강한 기운 ▶ " + GROUP_TEXT[gr.index(max(gr))])
     st.write("가장 약한 기운 ▶ " + GROUP_TEXT[gr.index(min(gr))])
+    lab, ratio = strength(r)
+    st.subheader("일간 강약 (신강·신약)")
+    st.write(f"**{lab}** (일간을 돕는 힘 약 {ratio * 100:.0f}%)")
+    st.write(STRENGTH_TEXT[lab])
+    st.caption("월지의 영향을 크게 본 간이 판정이며, 명리가마다 기준이 다를 수 있습니다.")
 
     st.subheader(f"대운 ({'순행' if r['fwd'] else '역행'} · {r['age']}세 시작)")
     age_now = date.today().year - r["by"]
@@ -253,12 +337,31 @@ if r:
     if cur >= 0:
         s, b = r["dae"][cur]
         st.write(f"**현재 대운: {STEM_K[s]}{BR_K[b]} ({ten(dm, s)} 운)**")
+    with st.expander("대운별 상세 풀이", expanded=True):
+        for k, (s, b) in enumerate(r["dae"]):
+            a0 = r["age"] + 10 * k
+            mark = "▶ " if k == cur else ""
+            st.markdown(f"{mark}**{a0}~{a0 + 9}세 · {STEM_K[s]}{BR_K[b]} 대운 ({ten(dm, s)}운)**  \n"
+                        f"{TEN_DAE[ten(dm, s)]}")
+        st.caption("대운의 천간 십성을 기준으로 한 간이 풀이입니다.")
 
     when = r["when"]
     txt = share_text(r, name, when)
     st.subheader("공유")
     st.code(txt, language=None)  # 오른쪽 위 복사 버튼 → 카톡 등에 붙여넣기
     st.download_button("텍스트 파일로 저장", txt, file_name="saju.txt")
+
+    st.subheader("AI에게 더 자세히 풀이받기")
+    q = ai_prompt(r)
+    st.code(q, language=None)  # 오른쪽 위 복사 버튼
+    enc = urllib.parse.quote(q)
+    b1, b2, b3 = st.columns(3)
+    b1.link_button("ChatGPT로 바로 보내기", f"https://chatgpt.com/?q={enc}")
+    b2.link_button("Claude로 보내기", f"https://claude.ai/new?q={enc}")
+    b3.link_button("Gemini 열기", "https://gemini.google.com/app")
+    st.caption("위 문장을 복사한 뒤 사용하는 AI 앱에 붙여넣어도 됩니다. Gemini는 열린 뒤 붙여넣기만 하면 되고, "
+               "ChatGPT·Claude 버튼은 입력칸에 문장이 비어 있으면 같은 방식으로 붙여넣으세요. "
+               "이름과 생년월일은 포함되지 않고 사주 글자만 전달됩니다.")
     if SAVE and st.button("이 사주 저장"):
         recs = load_recs()
         recs.append(dict(n=name or "이름없음", d=r["solar"].isoformat(), h=r["h"], m=r["mi"], g=r["g"], a=r["adj"]))
